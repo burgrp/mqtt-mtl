@@ -1,5 +1,5 @@
 {
-  "name": "@device.farm/mqtt-mtl",
+  "name": "@burgrp/mqtt-mtl",
   "version": "1.0.2",
   "description": "Selective multi-topic listener extension to mqtt library",
   "main": "mqtt-mtl.js",
