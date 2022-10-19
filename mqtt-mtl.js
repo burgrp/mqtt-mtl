@@ -10,6 +10,7 @@ module.exports = brokerUrl => {
             connection: mqtt.connect(brokerUrl),
 
             listeners: [],
+            nextListenerId: 0,
 
             publish(topic, message) {
                 this.connection.publish(topic, message);
@@ -19,7 +20,10 @@ module.exports = brokerUrl => {
                 this.connection.subscribe(topic);
 
                 let parsedTopic = topic.split("/");
-                this.listeners.push((actTopic, actMessage) => {
+
+                let id = this.nextListenerId++;
+
+                this.listeners[id] = (actTopic, actMessage) => {
                     let parsedActTopic = actTopic.split("/");
                     let matches = true;
                     for (let i in parsedTopic) {
@@ -35,14 +39,26 @@ module.exports = brokerUrl => {
                     if (matches) {
                         listener(actTopic, actMessage);
                     }
-                });
+                };
+
+                return id;
+            },
+
+            unsubscribe(listenerId) {
+                delete this.listeners[listenerId];
             }
         }
 
         brokers[brokerUrl] = broker;
 
         broker.connection.on("message", (topic, message) => {
-            broker.listeners.forEach(l => l(topic, message));
+            for (listener of Object.values(broker.listeners)) {
+                try {
+                    listener(topic, message);
+                } catch(e) {
+                    console.error("Unhandled MQTT listener exception:", e);
+                }
+            }
         });
     }
 
