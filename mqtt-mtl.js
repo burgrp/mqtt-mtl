@@ -11,15 +11,29 @@ module.exports = brokerUrl => {
 
             listeners: [],
             nextListenerId: 0,
+            subscriptions: {},
 
             publish(topic, message) {
                 this.connection.publish(topic, message);
             },
 
             subscribe(topic, listener) {
-                this.connection.subscribe(topic);
 
-                let parsedTopic = topic.split("/");
+                if (!(topic instanceof Object)) {
+                    topic = {
+                        strict: topic,
+                        loose: topic
+                    }
+                }
+
+                if (!this.subscriptions[topic.loose]) {
+                    this.connection.subscribe(topic.loose);
+                    this.subscriptions[topic.loose] = 1;
+                } else {
+                    this.subscriptions[topic.loose]++;
+                }
+
+                let parsedTopic = topic.strict.split("/");
 
                 let id = this.nextListenerId++;
 
@@ -45,7 +59,9 @@ module.exports = brokerUrl => {
             },
 
             unsubscribe(listenerId) {
-                delete this.listeners[listenerId];
+                //TODO: unsubscribe from MQTT if it's last subscription in this.subscriptions[]
+                //delete this.listeners[listenerId];
+                throw new Error("Not implemented yet");
             }
         }
 
