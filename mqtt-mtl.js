@@ -2,6 +2,26 @@ const mqtt = require("mqtt");
 
 let brokers = {};
 
+function matchesTopicWildcards(topic, filter) {
+    let topicParts = topic.split("/");
+    let filterParts = filter.split("/");
+
+    for (let i = 0; i < filterParts.length; i++) {
+        let filterPart = filterParts[i];
+        let topicPart = topicParts[i];
+
+        if (filterPart === "#") {
+            return true;
+        } else if (filterPart === "+") {
+            continue;
+        } else if (filterPart !== topicPart) {
+            return false;
+        }
+    }
+
+    return topicParts.length === filterParts.length;
+}
+
 module.exports = brokerUrl => {
 
     if (!brokers[brokerUrl]) {
@@ -11,29 +31,18 @@ module.exports = brokerUrl => {
                 protocolVersion: 5
             }),
 
-            listeners: {},
-            nextListenerId: 1,
+            listeners: [],
 
             publish(topic, message) {
                 this.connection.publish(topic, message);
             },
 
             subscribe(topic, listener) {
-
-                let id = this.nextListenerId++;
-
-                this.listeners[id] = listener;
-
-                this.connection.subscribe(topic, {
-                    properties: {
-                        subscriptionIdentifier: id
-                    }
-                });
-
-                return id;
+                this.listeners.push({topic, listener});
+                this.connection.subscribe(topic);
             },
 
-            unsubscribe(listenerId) {
+            unsubscribe(listener) {
                 //TODO: unsubscribe from MQTT if it's last subscription in this.subscriptions[]
                 //delete this.listeners[listenerId];
                 throw new Error("Not implemented yet");
@@ -43,23 +52,15 @@ module.exports = brokerUrl => {
         brokers[brokerUrl] = broker;
 
         broker.connection.on("message", (topic, message, packet) => {
-
-            let ids = (packet.properties && packet.properties.subscriptionIdentifier) || [];
-            if (!(ids instanceof Array)) {
-                ids = [ids];
-            }
-
-            for (let id of ids) {
-                let listener = broker.listeners[id];
-                if (listener) {
+            for (let {topic: filter, listener} of broker.listeners) {
+                if (matchesTopicWildcards(topic, filter)) {
                     try {
-                        listener(topic, message);
+                        listener(topic, message.toString());
                     } catch (e) {
                         console.error("Unhandled MQTT listener exception:", e);
                     }
                 }
             }
-
         });
     }
 
